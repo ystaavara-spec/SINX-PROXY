@@ -1,21 +1,11 @@
-# SINX API STARTER
+SINX PROXY API
 
-## Installation
+1. npm install
+2. create .env file
+3. add MONGO_URL
+4. npm start
 
-```bash
-npm install
-npm start
-```
-
-## Railway Deploy
-1. Upload project to GitHub
-2. Open Railway
-3. New Project
-4. Deploy from GitHub
-5. Select your repository
-
-## API Endpoints
-
-GET /
-POST /api/generate
-POST /api/check
+Endpoints:
+POST /generate-key
+POST /validate-key
+GET /keys

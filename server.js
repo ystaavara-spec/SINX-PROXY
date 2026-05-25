@@ -1,94 +1,67 @@
-const express = require('express');
-const cors = require('cors');
+import express from "express";
+import mongoose from "mongoose";
+import cors from "cors";
+import dotenv from "dotenv";
+import Key from "./models/Key.js";
+
+dotenv.config();
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
-// TEMP DATABASE
-let keys = [];
+mongoose.connect(process.env.MONGO_URL)
+  .then(() => console.log("MongoDB connected"))
+  .catch(err => console.log(err));
 
-// HOME
-app.get('/', (req, res) => {
-    res.send('SINX API ONLINE');
+app.post("/generate-key", async (req, res) => {
+  const { ip, duration } = req.body;
+
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let key = "SINX_";
+  for (let i = 0; i < 4; i++) {
+    key += chars[Math.floor(Math.random() * chars.length)];
+  }
+
+  const now = Date.now();
+  const expiresAt = now + duration * 24 * 60 * 60 * 1000;
+
+  const newKey = await Key.create({
+    key,
+    ip,
+    duration,
+    expiresAt,
+    status: "active"
+  });
+
+  res.json(newKey);
 });
 
-// GENERATE KEY
-app.post('/api/generate', (req, res) => {
-    const { ip, duration } = req.body;
+app.post("/validate-key", async (req, res) => {
+  const { key, ip } = req.body;
 
-    if (!ip || !duration) {
-        return res.status(400).json({
-            success: false,
-            message: 'Missing IP or duration'
-        });
-    }
+  const found = await Key.findOne({ key });
 
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  if (!found) return res.json({ ok: false, msg: "Key not found" });
 
-    let key = 'SINX_';
+  if (found.ip !== ip) return res.json({ ok: false, msg: "IP not allowed" });
 
-    for (let i = 0; i < 4; i++) {
-        key += chars.charAt(
-            Math.floor(Math.random() * chars.length)
-        );
-    }
+  if (Date.now() > found.expiresAt)
+    return res.json({ ok: false, msg: "Key expired" });
 
-    const newKey = {
-        key,
-        ip,
-        duration,
-        createdAt: Date.now(),
-        expiresAt:
-            Date.now() +
-            duration * 24 * 60 * 60 * 1000,
-        status: 'active'
-    };
+  found.status = "used";
+  found.usedByIP = ip;
+  found.usedAt = Date.now();
+  await found.save();
 
-    keys.push(newKey);
-
-    res.json({
-        success: true,
-        data: newKey
-    });
+  res.json({ ok: true, data: found });
 });
 
-// CHECK KEY
-app.post('/api/check', (req, res) => {
-    const { key, ip } = req.body;
-
-    const found = keys.find(k => k.key === key);
-
-    if (!found) {
-        return res.json({
-            success: false,
-            message: 'Key not found'
-        });
-    }
-
-    if (found.ip !== ip) {
-        return res.json({
-            success: false,
-            message: 'IP not allowed'
-        });
-    }
-
-    if (Date.now() > found.expiresAt) {
-        return res.json({
-            success: false,
-            message: 'Key expired'
-        });
-    }
-
-    res.json({
-        success: true,
-        message: 'Access granted'
-    });
+app.get("/keys", async (req, res) => {
+  const keys = await Key.find();
+  res.json(keys);
 });
 
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-    console.log('SINX API RUNNING ON PORT ' + PORT);
-});
+app.listen(process.env.PORT || 3000, () =>
+  console.log("Server running")
+);
